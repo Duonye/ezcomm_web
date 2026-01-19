@@ -1,0 +1,219 @@
+## **.github/workflows/ci-cd.yml**
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly security scans on Sunday at 00:00 UTC
+    - cron: '0 0 * * 0'
+  # Allow manual workflow triggers
+  workflow_dispatch:
+
+jobs:
+  # Job 1: Code Quality & Security
+  code-quality:
+    name: Code Quality & Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+        
+    - name: Install root dependencies
+      run: npm ci
+      
+    - name: Install client dependencies
+      working-directory: ./client
+      run: npm ci
+      
+    - name: Install server dependencies
+      working-directory: ./server
+      run: npm ci
+      
+    - name: Run ESLint on client
+      working-directory: ./client
+      run: npm run lint
+      
+    - name: CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+        
+    - name: Dependency Review
+      uses: actions/dependency-review-action@v4
+      
+    - name: Security Scan with Snyk
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+      continue-on-error: true
+
+  # Job 2: Testing
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: code-quality
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      run: |
+        npm ci
+        cd client && npm ci
+        cd ../server && npm ci
+        
+    - name: Run client tests
+      working-directory: ./client
+      run: npm test -- --passWithNoTests
+      
+    - name: Run server tests
+      working-directory: ./server
+      run: npm test -- --passWithNoTests
+      
+    - name: Build client
+      working-directory: ./client
+      run: npm run build
+      
+    - name: Upload client build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: client-build-${{ matrix.node-version }}
+        path: client/dist/
+        retention-days: 7
+
+  # Job 3: Build Docker Image
+  docker-build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      
+    - name: Login to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+        
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_USERNAME }}/ezcomm
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+          
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Docker image digest
+      run: |
+        echo "Image pushed with digest: ${{ steps.docker_build.outputs.digest }}"
+
+  # Job 4: Deploy to AWS
+  deploy-aws:
+    name: Deploy to AWS
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+        
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+      
+    - name: Deploy to Elastic Beanstalk
+      run: |
+        # Update Elastic Beanstalk environment with new Docker image
+        aws elasticbeanstalk update-environment \
+          --environment-name ezcomm-prod \
+          --version-label ${{ github.sha }}
+          
+    - name: Run smoke tests
+      run: |
+        # Wait for deployment to complete
+        sleep 30
+        
+        # Test application health
+        curl -f https://ezcomm.yourdomain.com/health || exit 1
+        
+    - name: Notify deployment status
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+  # Job 5: Performance Testing
+  performance-test:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: deploy-aws
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Run load test with Artillery
+      run: |
+        npm install -g artillery
+        artillery run ./load-test.yml
+      continue-on-error: true
+      
+    - name: Upload performance report
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: performance-report
+        path: reports/
+        retention-days: 30

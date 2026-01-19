@@ -1,0 +1,45 @@
+config:
+  target: "http://localhost:9000"
+  phases:
+    - duration: 60
+      arrivalRate: 10
+      name: Warm up
+    - duration: 120
+      arrivalRate: 50
+      name: Load test
+    - duration: 60
+      arrivalRate: 5
+      name: Cool down
+  payload:
+    path: "test-users.csv"
+    fields:
+      - "username"
+      - "room"
+  processor: "./load-test-processor.js"
+  
+scenarios:
+  - name: "Join room and send messages"
+    flow:
+      - think: 1
+      - post:
+          url: "/api/join"
+          json:
+            username: "{{ username }}"
+            room: "{{ room }}"
+          capture:
+            json: "$.socketId"
+            as: "socketId"
+      - think: 2
+      - loop:
+          - post:
+              url: "/api/message"
+              json:
+                socketId: "{{ socketId }}"
+                message: "Hello from {{ username }} at {{ $timestamp }}"
+          - think: 0.5
+        count: 10
+      - think: 3
+      - get:
+          url: "/api/leave"
+          qs:
+            socketId: "{{ socketId }}"

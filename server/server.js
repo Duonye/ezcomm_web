@@ -183,5 +183,45 @@ socket.on("delete", () => {
       socket.emit("join-response", joinInfo);
     });
   });
+
+  // Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || '1.0.0',
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    connections: io.engine?.clientsCount || 0
+  });
+});
+
+// Metrics endpoint for Prometheus
+app.get('/metrics', (req, res) => {
+  const metrics = {
+    active_connections: io.engine?.clientsCount || 0,
+    total_messages: Object.values(data.roomLogs || {}).reduce((acc, room) => acc + (room?.length || 0), 0),
+    active_rooms: Object.keys(data.roomLogs || {}).length,
+    active_users: data.users?.size || 0
+  };
+  
+  res.set('Content-Type', 'text/plain');
+  res.send(`# HELP ezcomm_active_connections Current WebSocket connections
+# TYPE ezcomm_active_connections gauge
+ezcomm_active_connections ${metrics.active_connections}
+
+# HELP ezcomm_total_messages Total messages sent
+# TYPE ezcomm_total_messages counter
+ezcomm_total_messages ${metrics.total_messages}
+
+# HELP ezcomm_active_rooms Active chat rooms
+# TYPE ezcomm_active_rooms gauge
+ezcomm_active_rooms ${metrics.active_rooms}
+
+# HELP ezcomm_active_users Active users
+# TYPE ezcomm_active_users gauge
+ezcomm_active_users ${metrics.active_users}`);
+});
+
 // Start the server listening on PORT, then call the callback (second argument)
 httpServer.listen(PORT, () => console.log(`Listening on port ${PORT}`));

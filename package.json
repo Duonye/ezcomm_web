@@ -1,0 +1,54 @@
+{
+  "name": "ezcomm-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Real-time chat application with React, Node.js, and Socket.io",
+  "keywords": ["chat", "real-time", "socket.io", "react", "nodejs"],
+  "homepage": "https://github.com/Duonye/EZComm_Web#readme",
+  "bugs": {
+    "url": "https://github.com/Duonye/EZComm_Web/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Duonye/EZComm_Web.git"
+  },
+  "license": "MIT",
+  "author": "Daniel Allison",
+  "scripts": {
+    "dev": "concurrently \"cd server && npm run dev\" \"cd client && npm run dev\"",
+    "build": "cd client && npm run build && npm run build-and-copy",
+    "start": "cd server && npm start",
+    "docker:build": "docker build -t ezcomm .",
+    "docker:run": "docker run -p 9000:9000 ezcomm",
+    "docker:compose": "docker-compose up",
+    "docker:compose-build": "docker-compose up --build",
+    "docker:dev": "docker-compose -f docker-compose.dev.yml up --build",
+    "test": "concurrently \"cd client && npm test\" \"cd server && npm test\"",
+    "test:client": "cd client && npm test",
+    "test:server": "cd server && npm test",
+    "lint": "concurrently \"cd client && npm run lint\"",
+    "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
+    "prepare": "husky install",
+    "ci:test": "npm run lint && npm test",
+    "ci:build": "npm run build"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.2",
+    "prettier": "^3.2.5"
+  },
+  "lint-staged": {
+    "**/*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "**/*.{json,md}": [
+      "prettier --write"
+    ]
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
