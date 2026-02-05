@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "Real-time chat application with React, Node.js, and Socket.io",
-  "keywords": ["chat", "real-time", "socket.io", "react", "nodejs"],
+  "keywords": [
+    "chat",
+    "real-time",
+    "socket.io",
+    "react",
+    "nodejs"
+  ],
   "homepage": "https://github.com/Duonye/EZComm_Web#readme",
   "bugs": {
     "url": "https://github.com/Duonye/EZComm_Web/issues"
@@ -28,9 +34,11 @@
     "test:server": "cd server && npm test",
     "lint": "concurrently \"cd client && npm run lint\"",
     "format": "prettier --write \"**/*.{js,jsx,json,md}\"",
-    "prepare": "husky install",
+    "prepare": "echo 'Skipping husky install for Vercel'",
     "ci:test": "npm run lint && npm test",
-    "ci:build": "npm run build"
+    "ci:build": "npm run build",
+    "postinstall": "npm run build",
+    "vercel-build": "cd client && npm run build"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
@@ -50,11 +58,5 @@
   "engines": {
     "node": "24.x",
     "npm": "9.0.0"
-  },
-  {
-  "scripts": {
-    "postinstall": "npm run build",
-    "build": "echo 'Build step'"
   }
-}
 }
