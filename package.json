@@ -50,7 +50,7 @@
   "engines": {
     "node": "24.x",
     "npm": "9.0.0"
-  }
+  },
   {
   "scripts": {
     "postinstall": "npm run build",
