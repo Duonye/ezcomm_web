@@ -1,7 +1,10 @@
 .husky/
 .huskyrc
-.huskyrc.json
-.huskyrc.js
-.huskyrc.yaml
-.huskyrc.yml
-
+.git/hooks/
+node_modules/
+server/
+docker-compose*
+Dockerfile*
+*.log
+.env
+.env.local
